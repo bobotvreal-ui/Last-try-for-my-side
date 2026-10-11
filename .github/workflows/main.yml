@@ -1,0 +1,47 @@
+name: RDP AlpGamer Fix
+
+on:
+  workflow_dispatch:
+
+jobs:
+  Deploy_RDP:
+    runs-on: windows-latest
+    timeout-minutes: 3600
+
+    steps:
+      - name: ⚙️ Setup RDP & Firewall
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          New-NetFirewallRule -DisplayName "Tailscale-RDP-Allow" -Direction Inbound -Protocol TCP -LocalPort 3389 -Action Allow -Profile Any
+          Restart-Service -Name "TermService" -Force
+
+      - name: 🔐 Create User
+        run: |
+          $TargetUser = "AlpGamerRDP"
+          $TargetPass = "GamerBoss@2026!"
+          $SecurePassString = ConvertTo-SecureString -String $TargetPass -AsPlainText -Force
+          New-LocalUser -Name $TargetUser -Password $SecurePassString -FullName "Alp Gamer Admin" -AccountNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member $TargetUser
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member $TargetUser
+
+      - name: 🌐 Install Tailscale
+        run: |
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi" -OutFile "C:\tailscale.msi" -UseBasicParsing
+          Start-Process -FilePath "msiexec.exe" -ArgumentList "/i C:\tailscale.msi /quiet /norestart" -Wait
+
+      - name: 🔌 Connect Tailscale
+        run: |
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="${{ secrets.TAILSCALE_AUTH_KEY }}" --hostname="alpgamer-rdp"
+          Start-Sleep -Seconds 15
+
+      - name: 🚀 Show RDP Info
+        run: |
+          $FinalIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          Write-Host "========================================="
+          Write-Host "IP ADDRESS : $FinalIP"
+          Write-Host "USERNAME   : AlpGamerRDP"
+          Write-Host "PASSWORD   : GamerBoss@2026!"
+          Write-Host "========================================="
+          while ($true) { Start-Sleep -Seconds 300 }
